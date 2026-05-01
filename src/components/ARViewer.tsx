@@ -2,31 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'model-viewer': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        alt?: string;
-        ar?: boolean;
-        'ar-modes'?: string;
-        'ar-scale'?: string;
-        'camera-controls'?: boolean;
-        'shadow-intensity'?: string;
-        'environment-image'?: string;
-        'auto-rotate'?: boolean;
-        scale?: string;
-        style?: React.CSSProperties;
-      }, HTMLElement>;
-    }
-  }
-}
 
 const SIZE_SCALES: Record<'small' | 'medium' | 'large', string> = {
   small: '0.20 0.20 0.20',
   medium: '0.30 0.30 0.30',
   large: '0.40 0.40 0.40',
 };
+
+const ModelViewer = 'model-viewer' as any;
 
 const SIZES: Array<{ key: 'small' | 'medium' | 'large'; label: string }> = [
   { key: 'small', label: 'S' },
@@ -148,7 +131,7 @@ export default function ARViewer({
             </p>
           </div>
         ) : (
-          <model-viewer
+          <ModelViewer
             ref={mvRef as any}
             src={modelPath}
             alt={`3D model of ${pizzaName}`}
