@@ -53,7 +53,6 @@ export default function ARViewer({
             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
               setCameraPermission('denied');
             } else {
-              // Other errors (e.g., camera in use) - we still try to proceed
               setCameraPermission('granted');
             }
           }
@@ -125,7 +124,7 @@ export default function ARViewer({
         ←
       </button>
 
-      {/* Model Viewer */}
+      {/* Model Viewer Container */}
       <div className="model-viewer-container">
         {isInitializing ? (
           <div className="ar-loader">
@@ -146,19 +145,34 @@ export default function ARViewer({
             alt={`3D model of ${pizzaName}`}
             ar
             ar-modes="webxr scene-viewer quick-look"
+            ar-placement="floor"
             ar-scale="fixed"
             camera-controls
-            shadow-intensity="1"
+            touch-action="none"
+            shadow-intensity="1.5"
+            shadow-softness="1"
+            exposure="1"
             environment-image="neutral"
             scale={SIZE_SCALES[selectedSize]}
             style={{ 
               width: '100%', 
               height: '100%', 
-              backgroundColor: 'transparent', // CRITICAL: Must be transparent for camera feed
+              backgroundColor: 'transparent',
               '--poster-color': 'transparent' 
             }}
             onError={() => setModelError(true)}
-          />
+          >
+            {/* Hit-test reticle for surface detection */}
+            <div slot="ar-button" style={{ display: 'none' }}></div>
+            <div id="ar-prompt">
+              <div className="ar-hand-animation"></div>
+              <p>Move your phone around to detect a surface</p>
+            </div>
+            
+            <div id="ar-failure">
+              <p>AR is not supported on this device</p>
+            </div>
+          </ModelViewer>
         )}
       </div>
 

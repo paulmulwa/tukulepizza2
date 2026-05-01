@@ -467,13 +467,12 @@ html, body {
 .ar-overlay {
   position: fixed;
   inset: 0;
-  background: transparent; /* Changed from #000 to allow camera feed visibility */
+  background: transparent;
   z-index: 1000;
   display: flex;
   flex-direction: column;
 }
 
-/* Fallback for when not in AR mode yet */
 .ar-overlay:not(:fullscreen) {
   background: rgba(0,0,0,0.9);
 }
@@ -547,6 +546,61 @@ html, body {
   width: 100%;
   height: 100%;
   position: relative;
+}
+
+/* AR Prompt (Hand Animation) */
+#ar-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  z-index: 1050;
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+  animation: fadeIn 0.5s ease both;
+}
+
+#ar-prompt p {
+  font-size: 14px;
+  margin-top: 10px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.ar-hand-animation {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto;
+  background: url('https://modelviewer.dev/assets/hand.png') no-repeat center;
+  background-size: contain;
+  animation: arHandMove 2s infinite ease-in-out;
+}
+
+@keyframes arHandMove {
+  0%, 100% { transform: translateX(-20px) rotate(-10deg); }
+  50% { transform: translateX(20px) rotate(10deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* AR Failure State */
+#ar-failure {
+  position: absolute;
+  inset: 0;
+  background: #111;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  z-index: 1200;
+}
+
+model-viewer[ar-status="failed"] #ar-failure {
+  display: flex;
 }
 
 /* Loader & Error states */
