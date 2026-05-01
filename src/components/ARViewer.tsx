@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-
 const SIZE_SCALES: Record<'small' | 'medium' | 'large', string> = {
   small: '0.20 0.20 0.20',
   medium: '0.30 0.30 0.30',
@@ -33,31 +32,53 @@ export default function ARViewer({
   onClose,
 }: ARViewerProps) {
   const [selectedSize, setSelectedSize] = useState(initialSize);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [modelError, setModelError] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const mvRef = useRef<HTMLElement>(null);
 
   const currentPrice = prices[selectedSize];
 
-  // Request device orientation permission on iOS
+  // Handle camera permissions and orientation
   useEffect(() => {
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-      (DeviceOrientationEvent as any)
-        .requestPermission()
-        .then((state: string) => {
-          if (state === 'denied') setPermissionDenied(true);
-        })
-        .catch(() => setPermissionDenied(true));
+    async function checkPermissions() {
+      try {
+        // 1. Check Camera Permission
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach(track => track.stop()); // Release the camera
+            setCameraPermission('granted');
+          } catch (err: any) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+              setCameraPermission('denied');
+            } else {
+              // Other errors (e.g., camera in use) - we still try to proceed
+              setCameraPermission('granted');
+            }
+          }
+        }
+
+        // 2. iOS Motion Permission
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+          await (DeviceOrientationEvent as any).requestPermission();
+        }
+      } catch (err) {
+        console.warn('Permission request failed:', err);
+      } finally {
+        setIsInitializing(false);
+      }
     }
+
+    checkPermissions();
   }, []);
 
-  // Animate scale change smoothly
+  // Update scale when size changes
   useEffect(() => {
     const mv = mvRef.current as any;
     if (!mv) return;
     const newScale = SIZE_SCALES[selectedSize];
-    // model-viewer exposes scale via attribute
     mv.setAttribute('scale', newScale);
   }, [selectedSize]);
 
@@ -65,23 +86,18 @@ export default function ARViewer({
     setSelectedSize(size);
   };
 
-  if (permissionDenied) {
+  if (cameraPermission === 'denied') {
     return (
       <div className="ar-overlay">
         <div className="permission-overlay">
           <div style={{ fontSize: 52 }}>📷</div>
-          <h2>Camera Access Needed</h2>
+          <h2>Camera Access Denied</h2>
           <p>
-            Camera access is needed to view your pizza in AR. Please allow camera
-            access in your browser settings and try again.
+            To view this pizza in your room, we need camera access. 
+            Please enable camera permissions in your browser settings and try again.
           </p>
-          <button
-            className="retry-btn"
-            onClick={() => {
-              setPermissionDenied(false);
-            }}
-          >
-            Try Again
+          <button className="retry-btn" onClick={() => window.location.reload()}>
+            Refresh Page
           </button>
           <button
             onClick={onClose}
@@ -95,7 +111,7 @@ export default function ARViewer({
               fontFamily: 'inherit',
             }}
           >
-            Go back
+            Go back to menu
           </button>
         </div>
       </div>
@@ -111,24 +127,17 @@ export default function ARViewer({
 
       {/* Model Viewer */}
       <div className="model-viewer-container">
-        {modelError ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#fff',
-              textAlign: 'center',
-              padding: 40,
-            }}
-          >
+        {isInitializing ? (
+          <div className="ar-loader">
+            <div className="spinner"></div>
+            <p>Initializing Camera...</p>
+          </div>
+        ) : modelError ? (
+          <div className="ar-error-view">
             <div style={{ fontSize: 64, marginBottom: 16 }}>🍕</div>
-            <h2 style={{ fontSize: 20, marginBottom: 8 }}>3D Preview Unavailable</h2>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>
-              The 3D model could not be loaded. Please check your connection and try again.
-            </p>
+            <h2>3D Preview Unavailable</h2>
+            <p>The 3D model could not be loaded. Please check your connection.</p>
+            <button className="retry-btn" onClick={onClose}>Return to Menu</button>
           </div>
         ) : (
           <ModelViewer
@@ -142,7 +151,12 @@ export default function ARViewer({
             shadow-intensity="1"
             environment-image="neutral"
             scale={SIZE_SCALES[selectedSize]}
-            style={{ width: '100%', height: '100%', background: '#1a1a1a' }}
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              backgroundColor: 'transparent', // CRITICAL: Must be transparent for camera feed
+              '--poster-color': 'transparent' 
+            }}
             onError={() => setModelError(true)}
           />
         )}
