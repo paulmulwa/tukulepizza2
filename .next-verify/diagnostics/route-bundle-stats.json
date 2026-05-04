@@ -1,0 +1,45 @@
+[
+  {
+    "route": "/pizza/[slug]",
+    "firstLoadUncompressedJsBytes": 779408,
+    "firstLoadChunkPaths": [
+      ".next-verify\\static\\chunks\\04eklj-7j4aqp.js",
+      ".next-verify\\static\\chunks\\0d3shmwh5_nmn.js",
+      ".next-verify\\static\\chunks\\07lswro-yw034.js",
+      ".next-verify\\static\\chunks\\065m_x94cob4z.js",
+      ".next-verify\\static\\chunks\\13aus3kqanczm.js",
+      ".next-verify\\static\\chunks\\0dgq26a5_oy.a.js",
+      ".next-verify\\static\\chunks\\08i8ui92_~far.js",
+      ".next-verify\\static\\chunks\\0v9c2uadhpd-i.js",
+      ".next-verify\\static\\chunks\\turbopack-0gh5uoe7fphaq.js"
+    ]
+  },
+  {
+    "route": "/",
+    "firstLoadUncompressedJsBytes": 767446,
+    "firstLoadChunkPaths": [
+      ".next-verify\\static\\chunks\\04eklj-7j4aqp.js",
+      ".next-verify\\static\\chunks\\0d3shmwh5_nmn.js",
+      ".next-verify\\static\\chunks\\0icm8aaa8_8l0.js",
+      ".next-verify\\static\\chunks\\0_5el816j8wea.js",
+      ".next-verify\\static\\chunks\\13aus3kqanczm.js",
+      ".next-verify\\static\\chunks\\0dgq26a5_oy.a.js",
+      ".next-verify\\static\\chunks\\08i8ui92_~far.js",
+      ".next-verify\\static\\chunks\\0v9c2uadhpd-i.js",
+      ".next-verify\\static\\chunks\\turbopack-0gh5uoe7fphaq.js"
+    ]
+  },
+  {
+    "route": "/_not-found",
+    "firstLoadUncompressedJsBytes": 518319,
+    "firstLoadChunkPaths": [
+      ".next-verify\\static\\chunks\\04eklj-7j4aqp.js",
+      ".next-verify\\static\\chunks\\0d3shmwh5_nmn.js",
+      ".next-verify\\static\\chunks\\13aus3kqanczm.js",
+      ".next-verify\\static\\chunks\\0dgq26a5_oy.a.js",
+      ".next-verify\\static\\chunks\\08i8ui92_~far.js",
+      ".next-verify\\static\\chunks\\0v9c2uadhpd-i.js",
+      ".next-verify\\static\\chunks\\turbopack-0gh5uoe7fphaq.js"
+    ]
+  }
+]

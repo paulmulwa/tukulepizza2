@@ -3,22 +3,42 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase, Pizza, isSupabaseConfigured } from '@/lib/supabase';
-import { LOCAL_PIZZAS } from '@/data/pizzas';
 import PizzaCard from '@/components/PizzaCard';
 import CategoryTabs from '@/components/CategoryTabs';
+
+type PizzaRow = Partial<Pizza> & {
+  toppings?: string[];
+  image_url?: string;
+  model3d_url?: string;
+  has_offer?: boolean;
+  offer_badge?: string;
+};
+
+const SUPABASE_TIMEOUT_MS = 3500;
+
+function withTimeout<T>(request: PromiseLike<T>) {
+  return Promise.race([
+    request,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error('Supabase request timed out')), SUPABASE_TIMEOUT_MS);
+    }),
+  ]);
+}
 
 export default function MenuPage() {
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [offline, setOffline] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(() =>
+    typeof navigator === 'undefined' ? false : !navigator.onLine,
+  );
 
   useEffect(() => {
     const handleOffline = () => setOffline(true);
     const handleOnline = () => setOffline(false);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
-    setOffline(!navigator.onLine);
     return () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
@@ -27,48 +47,57 @@ export default function MenuPage() {
 
   useEffect(() => {
     async function fetchPizzas() {
-      // Use local data immediately if Supabase is not configured
       if (!isSupabaseConfigured) {
-        setPizzas(LOCAL_PIZZAS);
+        setLoadError('Supabase is not configured. Add your keys to .env.local.');
+        setPizzas([]);
         setLoading(false);
         return;
       }
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setLoadError('You are offline. Please reconnect to load the menu.');
+        setPizzas([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
+      setLoadError(null);
+
       try {
-        const { data, error } = await supabase
-          .from('pizzas')
-          .select('*, pizza_sizes(label, price)')
-          .order('id');
-        if (error || !data || data.length === 0) {
-          setPizzas(LOCAL_PIZZAS);
+        const { data, error } = await withTimeout(
+          supabase
+            .from('pizzas')
+            .select('*')
+            .order('id'),
+        );
+        if (error || !data) {
+          setLoadError('Menu is unavailable right now. Please try again shortly.');
+          setPizzas([]);
         } else {
           // Map to handle old schema (image_url, toppings) and new schema
-          const mapped: Pizza[] = data.map((p: any) => {
-            const sizes = Array.isArray(p.pizza_sizes) ? p.pizza_sizes : [];
-            const small = sizes.find((s: any) => s.label === 'Small');
-            const medium = sizes.find((s: any) => s.label === 'Medium');
-            const large = sizes.find((s: any) => s.label === 'Large');
-
+          const mapped: Pizza[] = (data as PizzaRow[]).map((p) => {
             return {
-              id: p.id,
-              name: p.name,
-              slug: p.slug,
-              category: p.category,
-              description: p.description,
+              id: p.id ?? 0,
+              name: p.name ?? 'Pizza',
+              slug: p.slug ?? String(p.id ?? 'pizza'),
+              category: p.category ?? 'Classic',
+              description: p.description ?? '',
               ingredients: p.toppings || p.ingredients || [],
               tags: p.has_offer && p.offer_badge ? [p.offer_badge] : (p.tags || []),
               thumbnail_url: p.image_url || p.thumbnail_url || '',
               model_path: p.model3d_url || p.model_path || '',
-              price_small: small ? Number(small.price) : (p.price_small || 750),
-              price_medium: medium ? Number(medium.price) : (p.price_medium || 1000),
-              price_large: large ? Number(large.price) : (p.price_large || 2300),
+              price_small: Number(p.price_small ?? 750),
+              price_medium: Number(p.price_medium ?? 1000),
+              price_large: Number(p.price_large ?? 2300),
               created_at: p.created_at || new Date().toISOString(),
             };
           });
           setPizzas(mapped);
         }
       } catch {
-        setPizzas(LOCAL_PIZZAS);
+        setLoadError('Menu is unavailable right now. Please try again shortly.');
+        setPizzas([]);
       } finally {
         setLoading(false);
       }
@@ -128,6 +157,14 @@ export default function MenuPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="not-found" style={{ minHeight: '40vh' }}>
+            <div style={{ fontSize: 48 }}>⚠️</div>
+            <h2 style={{ fontSize: 18, margin: '12px 0 8px' }}>Menu unavailable</h2>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+              {loadError}
+            </p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="not-found" style={{ minHeight: '40vh' }}>

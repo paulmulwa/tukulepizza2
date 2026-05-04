@@ -56,7 +56,7 @@ const PIZZAS = [
     tags: ['Bestseller', 'Meat Lovers'],
     model_path: '/models/bbq-beef.glb',
     price_small: 900,
-    price_medium: 1300,
+    price_medium: 1200,
     price_large: 2500,
   },
   {
@@ -70,7 +70,7 @@ const PIZZAS = [
     model_path: '/models/garden-fresh.glb',
     price_small: 750,
     price_medium: 1000,
-    price_large: 2200,
+    price_large: 2300,
   },
   {
     name: 'Pepperoni Feast',
@@ -82,7 +82,7 @@ const PIZZAS = [
     tags: ['Bestseller', 'Classic Favorite'],
     model_path: '/models/pepperoni-feast.glb',
     price_small: 850,
-    price_medium: 1200,
+    price_medium: 1150,
     price_large: 2400,
   },
   {
@@ -95,7 +95,7 @@ const PIZZAS = [
     tags: ['Chef Special', 'Premium'],
     model_path: '/models/truffle-mushroom.glb',
     price_small: 950,
-    price_medium: 1400,
+    price_medium: 1300,
     price_large: 2500,
   },
   {
@@ -108,7 +108,7 @@ const PIZZAS = [
     tags: ['Spicy', 'Hot', 'Protein Rich'],
     model_path: '/models/hot-chicken.glb',
     price_small: 850,
-    price_medium: 1200,
+    price_medium: 1150,
     price_large: 2400,
   },
   {
@@ -120,8 +120,8 @@ const PIZZAS = [
     ingredients: ['Anchovies', 'Capers', 'Tomato Base', 'Kalamata Olives', 'Mozzarella'],
     tags: ['Classic', 'Traditional'],
     model_path: '/models/napolitana.glb',
-    price_small: 750,
-    price_medium: 1050,
+    price_small: 800,
+    price_medium: 1100,
     price_large: 2300,
   },
 ];
