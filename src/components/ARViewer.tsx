@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 const SIZE_SCALES: Record<'small' | 'medium' | 'large', string> = {
@@ -18,100 +19,109 @@ const SIZES: Array<{ key: 'small' | 'medium' | 'large'; label: string }> = [
 
 interface ARViewerProps {
   modelPath: string;
+  thumbnailUrl: string;
   pizzaName: string;
   initialSize: 'small' | 'medium' | 'large';
   prices: { small: number; medium: number; large: number };
   onClose: () => void;
 }
 
+function hasWebGLSupport() {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(
+      canvas.getContext('webgl') || canvas.getContext('experimental-webgl'),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function ARViewer({
   modelPath,
+  thumbnailUrl,
   pizzaName,
   initialSize,
   prices,
   onClose,
 }: ARViewerProps) {
   const [selectedSize, setSelectedSize] = useState(initialSize);
-  const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
-  const [modelError, setModelError] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [viewerState, setViewerState] = useState<'checking' | 'ready' | 'fallback'>('checking');
+  const [imageError, setImageError] = useState(false);
   const mvRef = useRef<HTMLElement>(null);
 
   const currentPrice = prices[selectedSize];
 
-  // Handle camera permissions and orientation
   useEffect(() => {
-    async function checkPermissions() {
-      try {
-        // 1. Check Camera Permission
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            stream.getTracks().forEach(track => track.stop()); // Release the camera
-            setCameraPermission('granted');
-          } catch (err: any) {
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-              setCameraPermission('denied');
-            } else {
-              setCameraPermission('granted');
-            }
-          }
-        }
+    let cancelled = false;
 
-        // 2. iOS Motion Permission
-        if (typeof DeviceOrientationEvent !== 'undefined' &&
-          typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-          await (DeviceOrientationEvent as any).requestPermission();
-        }
-      } catch (err) {
-        console.warn('Permission request failed:', err);
-      } finally {
-        setIsInitializing(false);
-      }
+    if (!modelPath || !hasWebGLSupport() || !('customElements' in window)) {
+      setViewerState('fallback');
+      return;
     }
 
-    checkPermissions();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setViewerState('fallback');
+    }, 5000);
 
-  // Update scale when size changes
+    const markReady = () => {
+      if (!cancelled) {
+        window.clearTimeout(timeout);
+        setViewerState('ready');
+      }
+    };
+
+    if (customElements.get('model-viewer')) {
+      markReady();
+    } else {
+      customElements
+        .whenDefined('model-viewer')
+        .then(markReady)
+        .catch(() => {
+          if (!cancelled) setViewerState('fallback');
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [modelPath]);
+
   useEffect(() => {
     const mv = mvRef.current as any;
     if (!mv) return;
-    const newScale = SIZE_SCALES[selectedSize];
-    mv.setAttribute('scale', newScale);
-  }, [selectedSize]);
+    mv.setAttribute('scale', SIZE_SCALES[selectedSize]);
+  }, [selectedSize, viewerState]);
 
-  const handleSizeChange = (size: 'small' | 'medium' | 'large') => {
-    setSelectedSize(size);
-  };
-
-  if (cameraPermission === 'denied') {
+  if (viewerState === 'fallback') {
     return (
-      <div className="ar-overlay">
-        <div className="permission-overlay">
-          <div style={{ fontSize: 52 }}>📷</div>
-          <h2>Camera Access Denied</h2>
-          <p>
-            To view this pizza in your room, we need camera access. 
-            Please enable camera permissions in your browser settings and try again.
-          </p>
-          <button className="retry-btn" onClick={() => window.location.reload()}>
-            Refresh Page
-          </button>
-          <button
-            onClick={onClose}
-            style={{
-              marginTop: 12,
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255,255,255,0.6)',
-              fontSize: 14,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Go back to menu
-          </button>
+      <div className="ar-overlay" role="dialog" aria-label="Pizza preview">
+        <button className="ar-back-btn" onClick={onClose} aria-label="Close preview" id="ar-back-btn">
+          &larr;
+        </button>
+
+        <div className="ar-fallback-view">
+          {!imageError && thumbnailUrl ? (
+            <Image
+              src={thumbnailUrl}
+              alt={pizzaName}
+              fill
+              unoptimized
+              sizes="100vw"
+              className="ar-fallback-image"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="ar-fallback-placeholder">Pizza</div>
+          )}
+          <div className="ar-fallback-scrim" />
+          <div className="ar-fallback-copy">
+            <p className="ar-fallback-kicker">Preview mode</p>
+            <h2>{pizzaName}</h2>
+            <p>3D AR is unavailable on this device or the model file is missing.</p>
+            <button className="retry-btn" onClick={onClose}>Back to menu</button>
+          </div>
         </div>
       </div>
     );
@@ -119,55 +129,51 @@ export default function ARViewer({
 
   return (
     <div className="ar-overlay" role="dialog" aria-label="AR Pizza Viewer">
-      {/* Back button */}
       <button className="ar-back-btn" onClick={onClose} aria-label="Close AR viewer" id="ar-back-btn">
-        ←
+        &larr;
       </button>
 
-      {/* Model Viewer Container */}
       <div className="model-viewer-container">
-        {isInitializing ? (
+        {viewerState === 'checking' ? (
           <div className="ar-loader">
             <div className="spinner"></div>
-            <p>Initializing Camera...</p>
-          </div>
-        ) : modelError ? (
-          <div className="ar-error-view">
-            <div style={{ fontSize: 64, marginBottom: 16 }}>🍕</div>
-            <h2>3D Preview Unavailable</h2>
-            <p>The 3D model could not be loaded. Please check your connection.</p>
-            <button className="retry-btn" onClick={onClose}>Return to Menu</button>
+            <p>Preparing preview...</p>
           </div>
         ) : (
           <ModelViewer
             ref={mvRef as any}
             src={modelPath}
+            poster={thumbnailUrl}
             alt={`3D model of ${pizzaName}`}
             ar
             ar-modes="scene-viewer webxr quick-look"
             ar-placement="floor"
             ar-scale="fixed"
             camera-controls
-            touch-action="none"
+            touch-action="pan-y"
             shadow-intensity="0.5"
             exposure="1"
             environment-image="neutral"
+            loading="eager"
+            reveal="auto"
+            interaction-prompt="auto"
             scale={SIZE_SCALES[selectedSize]}
-            style={{ 
-              width: '100%', 
-              height: '100%', 
-              backgroundColor: 'transparent',
-              '--poster-color': 'transparent' 
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#111',
+              '--poster-color': '#111',
             }}
-            onError={() => setModelError(true)}
+            onError={() => setViewerState('fallback')}
           >
-            {/* Hit-test reticle for surface detection */}
-            <div slot="ar-button" style={{ display: 'none' }}></div>
+            <button slot="ar-button" className="native-ar-btn">
+              View in your space
+            </button>
             <div id="ar-prompt">
               <div className="ar-hand-animation"></div>
               <p>Move your phone around to detect a surface</p>
             </div>
-            
+
             <div id="ar-failure">
               <p>AR is not supported on this device</p>
             </div>
@@ -175,14 +181,13 @@ export default function ARViewer({
         )}
       </div>
 
-      {/* Size controls overlay */}
       <div className="ar-size-controls" role="group" aria-label="Pizza size selector">
         {SIZES.map(({ key, label }) => (
           <button
             key={key}
             id={`ar-size-${key}`}
             className={`ar-size-btn${selectedSize === key ? ' active' : ''}`}
-            onClick={() => handleSizeChange(key)}
+            onClick={() => setSelectedSize(key)}
             aria-pressed={selectedSize === key}
           >
             {label}

@@ -139,6 +139,7 @@ export default function PizzaDetailPage() {
     return (
       <ARViewer
         modelPath={pizza.model_path}
+        thumbnailUrl={pizza.thumbnail_url}
         pizzaName={pizza.name}
         initialSize={selectedSize}
         prices={{

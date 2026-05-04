@@ -5,9 +5,16 @@ declare namespace JSX {
       alt?: string;
       ar?: boolean;
       'ar-modes'?: string;
+      'ar-placement'?: string;
       'ar-scale'?: string;
       'camera-controls'?: boolean;
+      poster?: string;
+      loading?: string;
+      reveal?: string;
+      'touch-action'?: string;
+      'interaction-prompt'?: string;
       'shadow-intensity'?: string;
+      exposure?: string;
       'environment-image'?: string;
       'auto-rotate'?: boolean;
       scale?: string;

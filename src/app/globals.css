@@ -17,11 +17,17 @@
 }
 
 html, body {
+  min-height: 100%;
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-poppins), 'Poppins', sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Scrollbar */
@@ -64,7 +70,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 /* Category Tabs */
@@ -361,7 +367,7 @@ html, body {
 .section-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   color: #E67E22;
   text-transform: uppercase;
   margin-bottom: 10px;
@@ -467,14 +473,19 @@ html, body {
 .ar-overlay {
   position: fixed;
   inset: 0;
-  background: transparent;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #111;
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .ar-overlay:not(:fullscreen) {
-  background: rgba(0,0,0,0.9);
+  background: #111;
 }
 
 .ar-back-btn {
@@ -501,7 +512,7 @@ html, body {
 
 .ar-size-controls {
   position: absolute;
-  bottom: 40px;
+  bottom: max(24px, calc(16px + env(safe-area-inset-bottom)));
   left: 50%;
   transform: translateX(-50%);
   z-index: 1100;
@@ -513,6 +524,7 @@ html, body {
   border-radius: 30px;
   padding: 10px 20px;
   width: max-content;
+  max-width: calc(100vw - 24px);
 }
 
 .ar-size-btn {
@@ -544,8 +556,27 @@ html, body {
 
 .model-viewer-container {
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100%;
   position: relative;
+}
+
+.native-ar-btn {
+  position: absolute;
+  right: 16px;
+  bottom: max(104px, calc(88px + env(safe-area-inset-bottom)));
+  z-index: 1100;
+  background: var(--color-yellow);
+  color: var(--color-text-primary);
+  border: none;
+  border-radius: 24px;
+  padding: 13px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-poppins), 'Poppins', sans-serif;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  cursor: pointer;
 }
 
 /* AR Prompt (Hand Animation) */
@@ -616,6 +647,70 @@ model-viewer[ar-status="failed"] #ar-failure {
   z-index: 1050;
   text-align: center;
   padding: 40px;
+}
+
+.ar-fallback-view {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #111;
+}
+
+.ar-fallback-image {
+  object-fit: cover;
+}
+
+.ar-fallback-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-yellow);
+  color: var(--color-text-primary);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.ar-fallback-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.82), rgba(0,0,0,0.08) 62%);
+}
+
+.ar-fallback-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(32px, calc(24px + env(safe-area-inset-bottom)));
+  z-index: 2;
+  color: #fff;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.ar-fallback-kicker {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--color-yellow);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ar-fallback-copy h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.ar-fallback-copy p {
+  max-width: 360px;
+  margin: 0 auto 18px;
+  color: rgba(255,255,255,0.75);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .ar-loader p {
@@ -805,4 +900,27 @@ model-viewer[ar-status="failed"] #ar-failure {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto;
+}
+
+@media (max-width: 380px) {
+  .ar-size-controls {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+
+  .ar-size-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ar-price-label {
+    font-size: 14px;
+  }
+
+  .native-ar-btn {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
 }
