@@ -144,13 +144,12 @@ export default function ARViewer({
             src={modelPath}
             alt={`3D model of ${pizzaName}`}
             ar
-            ar-modes="webxr scene-viewer quick-look"
+            ar-modes="scene-viewer webxr quick-look"
             ar-placement="floor"
             ar-scale="fixed"
             camera-controls
             touch-action="none"
-            shadow-intensity="1.5"
-            shadow-softness="1"
+            shadow-intensity="0.5"
             exposure="1"
             environment-image="neutral"
             scale={SIZE_SCALES[selectedSize]}
