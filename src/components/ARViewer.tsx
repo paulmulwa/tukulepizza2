@@ -4,6 +4,8 @@ import Image from 'next/image';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const SIZE_SCALES: Record<'small' | 'medium' | 'large', string> = {
   small: '0.20 0.20 0.20',
   medium: '0.30 0.30 0.30',
@@ -15,6 +17,8 @@ const SIZES: Array<{ key: 'small' | 'medium' | 'large'; label: string }> = [
   { key: 'medium', label: 'M' },
   { key: 'large', label: 'L' },
 ];
+
+// ─── Type shim for <model-viewer> ────────────────────────────────────────────
 
 type ModelViewerProps = {
   src?: string;
@@ -33,13 +37,38 @@ type ModelViewerProps = {
   reveal?: string;
   'interaction-prompt'?: string;
   scale?: string;
-  style?: CSSProperties & Record<'--poster-color', string>;
+  style?: CSSProperties & Record<string, string>;
   onError?: () => void;
   ref?: Ref<HTMLElement>;
   children?: ReactNode;
 };
 
 const ModelViewer = 'model-viewer' as unknown as (props: ModelViewerProps) => ReactNode;
+
+// ─── Device Detection ────────────────────────────────────────────────────────
+
+function detectDevice(): 'ios' | 'android' | 'desktop' {
+  if (typeof navigator === 'undefined') return 'desktop';
+  const ua = navigator.userAgent;
+  // iPads in desktop mode have platform === 'MacIntel' but maxTouchPoints > 1
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return 'desktop';
+}
+
+function hasWebGL(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+  } catch {
+    return false;
+  }
+}
+
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface ARViewerProps {
   modelPath: string;
@@ -49,31 +78,7 @@ interface ARViewerProps {
   prices: { small: number; medium: number; large: number };
 }
 
-function hasWebGLSupport() {
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(
-      canvas.getContext('webgl') || canvas.getContext('experimental-webgl'),
-    );
-  } catch {
-    return false;
-  }
-}
-
-async function sameOriginModelExists(modelPath: string) {
-  const url = new URL(modelPath, window.location.href);
-
-  if (url.origin !== window.location.origin) {
-    return true;
-  }
-
-  const response = await fetch(url, {
-    method: 'HEAD',
-    cache: 'no-store',
-  });
-
-  return response.ok;
-}
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ARViewer({
   modelPath,
@@ -83,118 +88,116 @@ export default function ARViewer({
   prices,
 }: ARViewerProps) {
   const [selectedSize, setSelectedSize] = useState(initialSize);
+  /**
+   * Viewer states:
+   *  checking     → still figuring out capabilities
+   *  ar           → device supports AR (iOS Quick Look / Android Scene Viewer)
+   *  model-only   → device has WebGL but no AR (desktop, older phones)
+   *  image-only   → no WebGL or model-viewer not available — show thumbnail
+   */
   const [viewerState, setViewerState] = useState<
-    'checking' | 'ready' | 'fallback-3d' | 'fallback-image'
+    'checking' | 'ar' | 'model-only' | 'image-only'
   >('checking');
   const [imageError, setImageError] = useState(false);
-  const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied'>(
-    'unknown',
-  );
+  const [iosPermissionPending, setIosPermissionPending] = useState(false);
   const mvRef = useRef<HTMLElement>(null);
 
   const currentPrice = prices[selectedSize];
-  const motionPermissionRequired =
-    typeof window !== 'undefined' &&
-    typeof DeviceMotionEvent !== 'undefined' &&
-    typeof (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> })
-      .requestPermission === 'function';
 
   const handleClose = () => {
-    if (typeof window !== 'undefined') {
-      window.history.back();
-    }
+    if (typeof window !== 'undefined') window.history.back();
   };
 
+  // ── Capability detection ──────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-    if (!modelPath || !hasWebGLSupport() || !('customElements' in window)) {
-      queueMicrotask(() => {
-        if (!cancelled) setViewerState('fallback-image');
-      });
-      return;
-    }
+    async function detect() {
+      // No WebGL → show image fallback immediately
+      if (!hasWebGL() || !('customElements' in window)) {
+        if (!cancelled) setViewerState('image-only');
+        return;
+      }
 
-    const timeout = window.setTimeout(() => {
-      if (!cancelled) setViewerState('fallback-image');
-    }, 5000);
+      // No model path → image fallback
+      if (!modelPath) {
+        if (!cancelled) setViewerState('image-only');
+        return;
+      }
 
-    const resolveSupport = async () => {
+      // Wait for model-viewer custom element to register (loaded via CDN script)
       try {
         if (!customElements.get('model-viewer')) {
-          await customElements.whenDefined('model-viewer');
-        }
-
-        const modelExists = await sameOriginModelExists(modelPath);
-        if (!modelExists) {
-          throw new Error('Model file is missing');
-        }
-
-        let arSupported = isIOS;
-        const xr = (navigator as Navigator & {
-          xr?: { isSessionSupported?: (mode: string) => Promise<boolean> };
-        }).xr;
-
-        if (!arSupported && xr?.isSessionSupported) {
-          arSupported = await xr.isSessionSupported('immersive-ar');
-        }
-
-        if (!cancelled) {
-          window.clearTimeout(timeout);
-          setViewerState(arSupported ? 'ready' : 'fallback-3d');
+          await Promise.race([
+            customElements.whenDefined('model-viewer'),
+            new Promise<never>((_, reject) =>
+              window.setTimeout(() => reject(new Error('timeout')), 6000),
+            ),
+          ]);
         }
       } catch {
-        if (!cancelled) {
-          window.clearTimeout(timeout);
-          setViewerState('fallback-image');
-        }
+        // model-viewer didn't load in time → image fallback
+        if (!cancelled) setViewerState('image-only');
+        return;
       }
-    };
 
-    resolveSupport();
+      if (cancelled) return;
 
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
+      const device = detectDevice();
+
+      if (device === 'ios') {
+        // iOS 12+ supports Quick Look AR natively — always enable AR
+        setViewerState('ar');
+      } else if (device === 'android') {
+        // Android supports Scene Viewer (ARCore) on most devices — always enable AR
+        // Scene Viewer will gracefully tell the user if ARCore isn't installed
+        setViewerState('ar');
+      } else {
+        // Desktop or unknown — show interactive 3D model without AR button
+        setViewerState('model-only');
+      }
+    }
+
+    detect();
+    return () => { cancelled = true; };
   }, [modelPath]);
 
-  const requestMotionPermission = async () => {
-    if (!motionPermissionRequired) {
-      setPermissionState('granted');
-      (mvRef.current as unknown as { activateAR?: () => void })?.activateAR?.();
-      return;
-    }
-
-    try {
-      const result = await (
-        DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
-      ).requestPermission();
-      const granted = result === 'granted';
-      setPermissionState(granted ? 'granted' : 'denied');
-
-      if (granted) {
-        (mvRef.current as unknown as { activateAR?: () => void })?.activateAR?.();
-      }
-    } catch {
-      setPermissionState('denied');
-    }
-  };
-
+  // ── Sync scale attribute when size changes ────────────────────────────────
   useEffect(() => {
     const mv = mvRef.current;
     if (!mv) return;
     mv.setAttribute('scale', SIZE_SCALES[selectedSize]);
   }, [selectedSize, viewerState]);
 
-  if (viewerState === 'fallback-image') {
+  // ── iOS motion permission (needed before activateAR on iOS 13+) ───────────
+  const requestIOSPermission = async () => {
+    const DevMotion = DeviceMotionEvent as unknown as {
+      requestPermission?: () => Promise<string>;
+    };
+    if (typeof DevMotion.requestPermission !== 'function') {
+      (mvRef.current as unknown as { activateAR?: () => void })?.activateAR?.();
+      return;
+    }
+    setIosPermissionPending(true);
+    try {
+      const result = await DevMotion.requestPermission();
+      if (result === 'granted') {
+        (mvRef.current as unknown as { activateAR?: () => void })?.activateAR?.();
+      }
+    } catch {
+      // User dismissed — do nothing
+    } finally {
+      setIosPermissionPending(false);
+    }
+  };
+
+  // ── Image-only fallback ───────────────────────────────────────────────────
+  if (viewerState === 'image-only') {
     return (
       <div className="ar-overlay" role="dialog" aria-label="Pizza preview">
         <button className="ar-back-btn" onClick={handleClose} aria-label="Close preview" id="ar-back-btn">
           &larr;
         </button>
-
         <div className="ar-fallback-view">
           {!imageError && thumbnailUrl ? (
             <Image
@@ -207,19 +210,27 @@ export default function ARViewer({
               onError={() => setImageError(true)}
             />
           ) : (
-            <div className="ar-fallback-placeholder">Pizza</div>
+            <div className="ar-fallback-placeholder">🍕</div>
           )}
           <div className="ar-fallback-scrim" />
           <div className="ar-fallback-copy">
-            <p className="ar-fallback-kicker">Preview mode</p>
+            <p className="ar-fallback-kicker">Preview</p>
             <h2>{pizzaName}</h2>
-            <p>3D AR is unavailable on this device or the model file is missing.</p>
-            <button className="retry-btn" onClick={handleClose}>Back to pizza</button>
+            <p>AR is not available on this device, but you can still see the pizza here!</p>
+            <button className="retry-btn" onClick={handleClose}>Back to menu</button>
           </div>
         </div>
       </div>
     );
   }
+
+  // ── Shared model-viewer style ─────────────────────────────────────────────
+  const mvStyle: CSSProperties & Record<string, string> = {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#111',
+    '--poster-color': '#111',
+  };
 
   return (
     <div className="ar-overlay" role="dialog" aria-label="AR Pizza Viewer">
@@ -230,10 +241,12 @@ export default function ARViewer({
       <div className="model-viewer-container">
         {viewerState === 'checking' ? (
           <div className="ar-loader">
-            <div className="spinner"></div>
-            <p>Preparing preview...</p>
+            <div className="spinner" />
+            <p>Preparing preview…</p>
           </div>
-        ) : viewerState === 'fallback-3d' ? (
+
+        ) : viewerState === 'model-only' ? (
+          /* Desktop / unsupported AR — interactive 3D only */
           <>
             <ModelViewer
               ref={mvRef}
@@ -242,26 +255,23 @@ export default function ARViewer({
               alt={`3D model of ${pizzaName}`}
               camera-controls
               touch-action="pan-y"
-              shadow-intensity="1"
+              shadow-intensity="0.5"
               exposure="1"
               environment-image="neutral"
               loading="eager"
               reveal="auto"
               interaction-prompt="auto"
               scale={SIZE_SCALES[selectedSize]}
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: '#111',
-                '--poster-color': '#111',
-              } as CSSProperties & Record<'--poster-color', string>}
-              onError={() => setViewerState('fallback-image')}
+              style={mvStyle}
+              onError={() => setViewerState('image-only')}
             />
             <div className="ar-unsupported">
-              <p>AR is not supported on your device, but here&apos;s your pizza in 3D.</p>
+              <p>AR is not supported on this device — but here&apos;s your pizza in 3D!</p>
             </div>
           </>
+
         ) : (
+          /* AR-capable device (iOS + Android) */
           <>
             <ModelViewer
               ref={mvRef}
@@ -269,48 +279,43 @@ export default function ARViewer({
               poster={thumbnailUrl}
               alt={`3D model of ${pizzaName}`}
               ar
-              ar-modes="webxr scene-viewer quick-look"
+              ar-modes="scene-viewer webxr quick-look"
               ar-placement="floor"
               ar-scale="fixed"
               camera-controls
               touch-action="pan-y"
-              shadow-intensity="1"
+              shadow-intensity="0.5"
               exposure="1"
               environment-image="neutral"
               loading="eager"
               reveal="auto"
               interaction-prompt="auto"
               scale={SIZE_SCALES[selectedSize]}
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: '#111',
-                '--poster-color': '#111',
-              } as CSSProperties & Record<'--poster-color', string>}
-              onError={() => setViewerState('fallback-image')}
+              style={mvStyle}
+              onError={() => setViewerState('image-only')}
             >
-              <button slot="ar-button" className="native-ar-btn">
-                View in your space
+              {/* Native AR launch button — styled via CSS .native-ar-btn */}
+              <button slot="ar-button" className="native-ar-btn" id="ar-native-btn">
+                📷 View in your space
               </button>
+
               <div id="ar-prompt">
-                <div className="ar-hand-animation"></div>
-                <p>Move your phone around to detect a surface</p>
+                <div className="ar-hand-animation" />
+                <p>Move your phone slowly to detect a flat surface</p>
               </div>
 
               <div id="ar-failure">
-                <p>AR is not supported on this device</p>
+                <p>AR is not available on this device</p>
               </div>
             </ModelViewer>
 
-            {motionPermissionRequired && permissionState !== 'granted' && (
+            {/* iOS 13+ needs a user-gesture to unlock motion/camera */}
+            {iosPermissionPending && (
               <div className="permission-overlay" role="alertdialog" aria-live="polite">
-                <h2>Enable camera access</h2>
-                <p>
-                  Camera access is needed to view your pizza in AR. Please allow camera and motion
-                  access in your browser settings.
-                </p>
-                <button className="retry-btn" onClick={requestMotionPermission}>
-                  Try Again
+                <h2>Allow Camera Access</h2>
+                <p>Camera and motion access are required to view the pizza in your room.</p>
+                <button className="retry-btn" onClick={requestIOSPermission}>
+                  Allow & Launch AR
                 </button>
               </div>
             )}
@@ -318,6 +323,7 @@ export default function ARViewer({
         )}
       </div>
 
+      {/* Size + price controls */}
       <div className="ar-size-controls" role="group" aria-label="Pizza size selector">
         {SIZES.map(({ key, label }) => (
           <button
@@ -330,9 +336,7 @@ export default function ARViewer({
             {label}
           </button>
         ))}
-        <span className="ar-price-label">
-          Ksh {currentPrice.toLocaleString()}
-        </span>
+        <span className="ar-price-label">Ksh {currentPrice.toLocaleString()}</span>
       </div>
     </div>
   );
